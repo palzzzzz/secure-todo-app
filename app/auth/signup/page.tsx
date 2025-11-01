@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { signUpSchema, SignUpInput, RateLimiter } from '@/lib/validation';
-import { Lock, Mail, UserPlus, ArrowLeft, CheckCircle } from 'lucide-react';
-import Link from 'next/link';
+import { UserPlus, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 
 const rateLimiter = new RateLimiter();
 
@@ -18,84 +17,97 @@ export default function SignUp() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  async function handleSignUp(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError('');
-
+    
+    // Rate limiting: max 3 attempts per minute
     if (!rateLimiter.isAllowed('signup', 3, 60000)) {
-      setError('Terlalu banyak percobaan registrasi. Tunggu 1 menit.');
+      setError('Terlalu banyak percobaan. Tunggu 1 menit.');
       return;
     }
 
     setLoading(true);
+    setError('');
+    setSuccess(false);
 
     try {
+      // Validate input
       const validated = signUpSchema.parse(formData);
 
+      // Sign up with Supabase
       const { data, error } = await supabase.auth.signUp({
         email: validated.email,
         password: validated.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
 
       if (error) throw error;
 
       if (data.user) {
-        alert('Registrasi berhasil! Silakan login.');
-        router.push('/auth/signin');
+        setSuccess(true);
+        setTimeout(() => {
+          router.push('/auth/signin');
+        }, 2000);
       }
     } catch (error: any) {
       if (error.errors) {
-        setError(error.errors[0].message);
+        setError(error.errors[0]?.message || 'Validasi gagal');
       } else {
-        setError(error.message || 'Gagal membuat akun');
+        setError(error.message || 'Registrasi gagal. Coba lagi.');
       }
     } finally {
       setLoading(false);
     }
   }
 
-  const passwordRequirements = [
-    { text: 'Minimal 8 karakter', met: formData.password.length >= 8 },
-    { text: 'Mengandung huruf besar', met: /[A-Z]/.test(formData.password) },
-    { text: 'Mengandung huruf kecil', met: /[a-z]/.test(formData.password) },
-    { text: 'Mengandung angka', met: /[0-9]/.test(formData.password) },
-  ];
-
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-green-100 via-blue-50 to-purple-100">
-      <div className="w-full max-w-md">
-        <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-100 via-blue-50 to-purple-200 px-4">
+      <div className="max-w-md w-full">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-400 to-purple-500 rounded-full mb-4">
-              <UserPlus className="w-8 h-8 text-white" />
+            <div className="inline-block p-3 bg-blue-100 rounded-full mb-4">
+              <UserPlus className="w-8 h-8 text-blue-600" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Create Account</h1>
-            <p className="text-gray-600">Sign up for a secure todo account</p>
+            <h1 className="text-3xl font-bold text-gray-800">Buat Akun</h1>
+            <p className="text-gray-600 mt-2">Daftar untuk menggunakan NoteMahasiswa</p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm">
-              {error}
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-red-700 text-sm">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSignUp} className="space-y-5">
+          {success && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-green-700 text-sm font-medium">Account created successfully!</p>
+                <p className="text-green-600 text-xs mt-1">Redirecting to sign in...</p>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
+                Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="email"
-                  required
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="your@email.com"
+                  required
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -105,38 +117,20 @@ export default function SignUp() {
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="password"
-                  required
                   value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
-                  placeholder="Create a strong password"
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Min. 8 characters"
+                  required
+                  disabled={loading}
                 />
               </div>
-
-              {formData.password && (
-                <div className="mt-3 space-y-2">
-                  {passwordRequirements.map((req, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-center gap-2 text-xs ${
-                        req.met ? 'text-green-600' : 'text-gray-500'
-                      }`}
-                    >
-                      <CheckCircle
-                        className={`w-4 h-4 ${
-                          req.met ? 'text-green-500' : 'text-gray-300'
-                        }`}
-                      />
-                      {req.text}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <p className="text-xs text-gray-500 mt-2">
+                Must contain: uppercase, lowercase, and number
+              </p>
             </div>
 
             <div>
@@ -144,53 +138,41 @@ export default function SignUp() {
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="password"
-                  required
                   value={formData.confirmPassword}
-                  onChange={(e) =>
-                    setFormData({ ...formData, confirmPassword: e.target.value })
-                  }
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
-                  placeholder="Confirm your password"
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Re-enter password"
+                  required
+                  disabled={loading}
                 />
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-gray-800 to-gray-900 text-white py-3 px-6 rounded-full hover:from-gray-900 hover:to-black transition duration-300 flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              disabled={loading || success}
+              className="w-full bg-gray-900 text-white py-3 rounded-full font-medium hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
-              {loading ? (
-                'Creating account...'
-              ) : (
-                <>
-                  <UserPlus className="w-5 h-5" />
-                  Sign Up
-                </>
-              )}
+              {loading ? 'Creating account...' : 'Sign Up'}
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-gray-600 text-sm">
+            <p className="text-gray-600">
               Already have an account?{' '}
-              <Link
-                href="/auth/signin"
-                className="text-purple-600 hover:text-purple-700 font-medium inline-flex items-center gap-1"
-              >
-                <ArrowLeft className="w-4 h-4" />
+              <a href="/auth/signin" className="text-blue-600 hover:text-blue-700 font-medium">
                 Sign in
-              </Link>
+              </a>
             </p>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-              <Lock className="w-3 h-3" />
-              <span>Your data is encrypted and secure</span>
+              <Lock className="w-4 h-4" />
+              <span>Secured with SSL/TLS encryption</span>
             </div>
           </div>
         </div>
